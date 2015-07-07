@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+  	<title>Message Count</title>
+  </head>
+  <body>
+	 <script>
+  window.fbAsyncInit = function() {
+    FB.init({
+      appId      : 'your-app-id-here',
+      xfbml      : true,
+      version    : 'v2.3'
+    });
+
+FB.getLoginStatus(function(response) {
+  if (response.status === 'connected') {
+    console.log('Logged in.');
+  }
+  else {
+    FB.login();
+    console.log('Logging in.');
+  }
+});
+
+  };
+
+  (function(d, s, id){
+     var js, fjs = d.getElementsByTagName(s)[0];
+     if (d.getElementById(id)) {return;}
+     js = d.createElement(s); js.id = id;
+     js.src = "//connect.facebook.net/en_US/sdk.js";
+     fjs.parentNode.insertBefore(js, fjs);
+   }(document, 'script', 'facebook-jssdk'));
+</script>
+
+<!-- Experimental Stuff -->
+
+<script>
+
+function httpGet(theUrl)
+{
+	var xmlHttp = new XMLHttpRequest();
+	xmlHttp.open( "GET", theUrl, false );
+	xmlHttp.send( null );
+	return xmlHttp.responseText;
+}
+
+//TODO Calculate users = Total number of threads
+var users = 100; //Maximum number of threads to be read
+var count = 0;
+var entries = [];
+var my_id;
+
+function getMyId(response)
+{
+	//TODO Faster ID retrieval
+	var single_counted = 0;
+	var ids = []
+	for(index in response.data)
+	{
+		if(response.data[index].participants.data.length == '2')
+		{
+			ids.push(response.data[index].participants.data[0].id);
+			ids.push(response.data[index].participants.data[1].id);
+			single_counted++;
+		}
+		if(single_counted == 2)
+			break;
+	}
+	//console.log(ids);
+	for(id1 in ids)
+	{
+		for(id2 in ids)
+		{
+			if(ids[id1]==ids[id2]&&id1!=id2)
+				my_id = ids[id1];
+		}
+	}
+	//console.log(my_id);
+}
+
+function handleNewResponse(response)
+{
+	//console.log(response);
+
+	for(value in response.data)
+	{
+		//console.log("Participants length : "+response.data[value].participants.data.length);
+		if(response.data[value].participants.data.length == '1')
+		{
+			//console.log('Self Inbox');
+			//senders.push("Self Inbox - "+ response.data[value].message_count +" total messages");
+			entries.push({'id':response.data[value].participants.data[0].id, 'name':response.data[value].participants.data[0].name,'message_count':response.data[value].message_count});
+			continue;
+		}
+		if(response.data[value].participants.data.length > '2')
+		{
+			//console.log('Group Conversation');
+			//TODO Get name of group conversation
+			//senders.push("Group Conversation - "+ response.data[value].message_count +" total messages");
+			entries.push({'id':response.data[value].participants.data[0].id, 'name':"Group Conversation",'message_count':response.data[value].message_count});
+			continue;
+		}
+		if(response.data[value].participants.data[0].id == my_id)
+		{
+			//senders.push(response.data[value].participants.data[1].name +" - "+ response.data[value].message_count+" total messages");
+			entries.push({'id':response.data[value].participants.data[1].id, 'name':response.data[value].participants.data[1].name,'message_count':response.data[value].message_count});
+		}
+		else
+		{
+			//senders.push(response.data[value].participants.data[0].name +" - "+ response.data[value].message_count+" total messages");
+			entries.push({'id':response.data[value].participants.data[0].id, 'name':response.data[value].participants.data[0].name,'message_count':response.data[value].message_count});
+		}
+
+		//Update the loading bar
+		count++;
+		var bardiv = document.getElementById('loadingbar');
+		var percent = (count*100)/users;
+		bardiv.innerHTML = "<progress value='"+percent.toString()+"' max='100'></progress>&nbsp;"+percent.toString()+"% done";
+	}
+	
+}
+
+function test(){
+	FB.login(function(){
+		FB.api(
+    "/me/threads",
+    function (response) {  
+    if (response && !response.error) {
+        /* handle the result */	
+    	getMyId(response);
+	handleNewResponse(response);
+     }
+	var newresponse = response;
+	
+	//TODO Find maximum limit to i, currently 9 iterations
+	var limit = (users-25)/25;
+	for(var i = 0; i < limit; i++)
+	{
+		//console.log(i+" done");
+
+		//Control the loading bar
+		//var bardiv = document.getElementById('loadingbar');
+		//div.innerHTML = "<progress value='' max=''></progress>";
+		//Get the new response and handle it
+		newresponse = JSON.parse(httpGet(newresponse.paging.next));
+		if(newresponse && !newresponse.error)
+		{
+			handleNewResponse(newresponse);
+		}
+		else
+		{
+			break;
+		}
+	}
+	//End Preprocessing
+
+	entries.sort(function(a,b){return parseInt(b.message_count) - parseInt(a.message_count);});
+	
+	//Begin Postprccessing
+	var mydiv = document.getElementById('messages');
+	var tempdiv;
+	tempdiv = document.createElement('div');
+	tempdiv.innerHTML = "The 10 people with the highest message count who have messaged you recently are:-";
+	mydiv.appendChild(tempdiv);
+	for(var i = 0;i < 10; i++)
+	{
+		tempdiv = document.createElement('div');
+		tempdiv.classname = 'sendersList';
+		tempdiv.innerHTML = "<img src='https://graph.facebook.com/"+entries[i].id+"/picture'>"+" "+entries[i].name+" - "+entries[i].message_count+" total messages.";
+		mydiv.appendChild(tempdiv);
+	}
+	document.getElementById('test').style = "display:none";
+	document.getElementById('loadingbar').style = "display:none";
+	//console.log(entries);
+
+    }
+);
+},{scope: 'read_mailbox'});
+}
+
+</script>
+<button id="test" onclick="test()">Get message senders and total message counts</button>
+<!-- End Experimental Stuff-->
+
+<div id="loadingbar"></div>
+
+<div id="messages"></div>
+  </body>
+</html>
+
